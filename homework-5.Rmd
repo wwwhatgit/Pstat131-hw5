@@ -31,16 +31,51 @@ Read in the file and familiarize yourself with the variables using `pokemon_code
 
 Install and load the `janitor` package. Use its `clean_names()` function on the Pokémon data, and save the results to work with for the rest of the assignment. What happened to the data? Why do you think `clean_names()` is useful?
 
+The clean_names() function convert column names to certain format. It is useful because it unified column format that they does not contain any other special character.
+
+
+```{r}
+library(tidymodels)
+library(ISLR)
+library(tidyverse)
+library(glmnet)
+tidymodels_prefer()
+library('janitor')
+
+```
+```{r}
+Pokemon <- read.csv(file = 'Pokemon.csv')
+Pokemon <- Pokemon%>%clean_names()
+
+```
+
+
+
 ### Exercise 2
 
 Using the entire data set, create a bar chart of the outcome variable, `type_1`.
 
 How many classes of the outcome are there? Are there any Pokémon types with very few Pokémon? If so, which ones?
 
+#### There are 18 classes and Flying type is very few. 
+
 For this assignment, we'll handle the rarer classes by simply filtering them out. Filter the entire data set to contain only Pokémon whose `type_1` is Bug, Fire, Grass, Normal, Water, or Psychic.
 
 After filtering, convert `type_1` and `legendary` to factors.
 
+
+```{r}
+ggplot(Pokemon, aes(x = type_1)) +
+  geom_bar()
+
+Pokemon$type_1 <- as.factor(Pokemon$type_1)
+Pokemon$legendary <- as.factor(Pokemon$legendary)
+
+```
+```{r}
+
+
+```
 ### Exercise 3
 
 Perform an initial split of the data. Stratify by the outcome variable. You can choose a proportion to use. Verify that your training and test sets have the desired number of observations.
