@@ -68,12 +68,17 @@ After filtering, convert `type_1` and `legendary` to factors.
 ggplot(Pokemon, aes(x = type_1)) +
   geom_bar()
 
-Pokemon$type_1 <- as.factor(Pokemon$type_1)
-Pokemon$legendary <- as.factor(Pokemon$legendary)
 
 ```
 ```{r}
 
+
+
+#Bug, Fire, Grass, Normal, Water, or Psychic
+Pokemon <- Pokemon[Pokemon$type_1 %in% c('Bug', 'Fire', 'Grass', 'Normal', 'Water', 'Psychic'),]
+
+Pokemon$type_1 <- as.factor(Pokemon$type_1)
+Pokemon$legendary <- as.factor(Pokemon$legendary)
 
 ```
 ### Exercise 3
@@ -82,6 +87,20 @@ Perform an initial split of the data. Stratify by the outcome variable. You can 
 
 Next, use *v*-fold cross-validation on the training set. Use 5 folds. Stratify the folds by `type_1` as well. *Hint: Look for a `strata` argument.* Why might stratifying the folds be useful?
 
+#### Answer: it could be useful for make sure the distribution of a specified variable stay the same for our resample.
+```{r}
+set.seed(1101)
+Pokemon_split <- initial_split(Pokemon, prop = 0.75, strata = type_1)
+Pokemon_train <- training(Pokemon_split)
+Pokemon_test <- testing(Pokemon_split)
+
+dim(Pokemon_train)
+dim(Pokemon_test)
+
+
+
+Pokemon_folds <- vfold_cv(data = Pokemon_train, v = 5, strata = type_1)
+```
 ### Exercise 4
 
 Set up a recipe to predict `type_1` with `legendary`, `generation`, `sp_atk`, `attack`, `speed`, `defense`, `hp`, and `sp_def`.
@@ -89,7 +108,18 @@ Set up a recipe to predict `type_1` with `legendary`, `generation`, `sp_atk`, `a
 - Dummy-code `legendary` and `generation`;
 
 - Center and scale all predictors.
+```{r}
+set.seed(1101)
 
+Pokemon_recipe <- recipe(type_1 ~ legendary + generation + 
+                           sp_atk + attack + speed + defense + 
+                           hp + sp_def, data = Pokemon_train) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_normalize(all_predictors())
+
+
+
+```
 ### Exercise 5
 
 We'll be fitting and tuning an elastic net, tuning `penalty` and `mixture` (use `multinom_reg` with the `glmnet` engine).
@@ -98,16 +128,64 @@ Set up this model and workflow. Create a regular grid for `penalty` and `mixture
 
 How many total models will you be fitting when you fit these models to your folded data?
 
+#### Answer: we have 100 models and 5 folds therefore there will be 500 models total.
+```{r}
+set.seed(1101)
+
+elastic_net_spec <- multinom_reg(penalty = tune(), 
+                                 mixture = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet")
+
+elastic_net_workflow <- workflow() %>% 
+  add_recipe(Pokemon_recipe) %>% 
+  add_model(elastic_net_spec)
+
+elastic_net_grid <- grid_regular(penalty(range = c(-5, 5)), 
+                        mixture(range = c(0, 1)), levels = 10)
+
+
+
+```
 ### Exercise 6
 
 Fit the models to your folded data using `tune_grid()`.
 
 Use `autoplot()` on the results. What do you notice? Do larger or smaller values of `penalty` and `mixture` produce better accuracy and ROC AUC?
 
+#### Answer: Smaller values of penalty and mixture gives us higher roc_auc
+```{r}
+set.seed(1101)
+
+tune_res <- tune_grid(
+  elastic_net_workflow,
+  resamples = Pokemon_folds, 
+  grid = elastic_net_grid
+)
+
+```
+
+```{r}
+autoplot(tune_res)
+
+
+```
 ### Exercise 7
 
 Use `select_best()` to choose the model that has the optimal `roc_auc`. Then use `finalize_workflow()`, `fit()`, and `augment()` to fit the model to the training set and evaluate its performance on the testing set.
+```{r}
+set.seed(1101)
 
+best_model <- select_best(tune_res, metric = "roc_auc")
+
+elastic_net_final <- finalize_workflow(elastic_net_workflow, best_model)
+
+elastic_net_final_fit <- fit(elastic_net_final, data = Pokemon_train)
+
+predicted_data <- augment(elastic_net_final_fit, new_data = Pokemon_test) %>% 
+  select(type_1, starts_with(".pred"))
+
+```
 ### Exercise 8
 
 Calculate the overall ROC AUC on the testing set.
@@ -116,6 +194,25 @@ Then create plots of the different ROC curves, one per level of the outcome. Als
 
 What do you notice? How did your model do? Which Pokemon types is the model best at predicting, and which is it worst at? Do you have any ideas why this might be?
 
+
+
+#### Answer: Based on the roc_auc value the model is about 74.33% accurate and from the graphs, we can see that my model performs worst at identifying Grass and Fire type and perform best at Normal type. I think this happen because I don't have enough test set for Fire and Grass to fix this I could change the proportion of the split
+```{r}
+set.seed(1101)
+
+predicted_data %>% roc_auc(type_1, .pred_Bug:.pred_Water)
+predicted_data %>% roc_curve(type_1, .pred_Bug:.pred_Water) %>% 
+  autoplot()
+
+```
+```{r}
+set.seed(1101)
+
+predicted_data %>% 
+  conf_mat(truth = type_1, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+
+```
 ## For 231 Students
 
 ### Exercise 9
